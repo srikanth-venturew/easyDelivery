@@ -24,6 +24,11 @@ export class MainController {
         this.awesomeThings = response.data;
         this.socket.syncUpdates('thing', this.awesomeThings);
       });
+      this.$http.get('/api/orders')
+      .then(response => {
+        this.orders = response.data;
+        console.log("this.orders :",this.orders);
+      });
   }
 
   addThing() {

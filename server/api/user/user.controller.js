@@ -34,15 +34,60 @@ function sendJSONresponse(res, status, content) {
 };
 
 /**
- * Get list of users
+ * Get list of users,runners
  * restriction: 'admin'
  */
 export function index(req, res) {
-  return User.find({}, '-salt -password').exec()
-    .then(users => {
-      res.status(200).json(users);
-    })
-    .catch(handleError(res));
+  console.log('req.query :', req.query);
+  var query = {};
+  if (Object.keys(req.query).length > 0) {
+    query.role = req.query.role;
+    //status can free or atWork
+    if (query.role == 'runner' && req.query.status) {
+      query.runner = {};
+      query.runner.status = req.query.status
+    }
+    var pipeline = [
+      {
+        "$match": {
+          "runner.status": req.query.status
+        }
+      },
+      { "$unwind": "$runner" },
+      {
+        "$match": {
+          "runner.status": req.query.status
+        }
+      },
+      {
+        "$group": {
+          "_id": "$_id",
+          "runner": {
+            "$push": "$runner"
+          }
+        }
+      }
+    ]
+
+    User.aggregate(pipeline).exec(function (err, runners) {
+      if (err) return handleError(err);
+      console.log(runners); // [ { orders: [...] } ]
+      sendJSONresponse(res, 200, {
+        "status": "success",
+        "message": "Runners found successfully",
+        "data": {
+          "runners": runners
+        }
+      });
+    });
+  }
+  else {
+    return User.find(query, '-salt -password').exec()
+      .then(users => {
+        res.status(200).json(users);
+      })
+      .catch(handleError(res));
+  }
 }
 
 /**
@@ -151,25 +196,33 @@ export function me(req, res, next) {
 
 // Updates an existing User in the DB
 export function patch(req, res) {
-  User.findByIdAndUpdate(req.params.id,
-    {
-      $set: {
-        "runner": req.body.runner
-      }
-    }, { new: true }, function (err, user) {
-      if (err) {
-        sendJSONresponse(res, 200, {
-          "status": "failure",
-          "message": "User updated failed",
-        });
-      }
-      else {
-        sendJSONresponse(res, 200, {
-          "status": "success",
-          "message": "User successfully updated",
-        });
-      }
-    })
+  if (req.params.id) {
+    User.findByIdAndUpdate(req.params.id,
+      {
+        $set: {
+          "runner": req.body.runner
+        }
+      }, { new: true }, function (err, user) {
+        if (err) {
+          sendJSONresponse(res, 200, {
+            "status": "failure",
+            "message": "User updated failed",
+          });
+        }
+        else {
+          sendJSONresponse(res, 200, {
+            "status": "success",
+            "message": "User successfully updated",
+          });
+        }
+      })
+  }
+  else {
+    sendJSONresponse(res, 200, {
+      "status": "failure",
+      "message": "please send id of the user",
+    });
+  }
 }
 
 /**

@@ -9,6 +9,12 @@ var validateJwt = expressJwt({
   secret: config.secrets.session
 });
 
+function sendJSONresponse(res, status, content) {
+  res.status(status);
+  res.json(content);
+};
+
+
 /**
  * Attaches the user object to the request if authenticated
  * Otherwise returns 403
@@ -22,17 +28,25 @@ export function isAuthenticated() {
         req.headers.authorization = `Bearer ${req.query.access_token}`;
       }
      // IE11 forgets to set Authorization header sometimes. Pull from cookie instead.
-      if(req.query && typeof req.headers.authorization === 'undefined') {
+      if(req.query && typeof req.headers.authorization === 'undefined' && req.cookies.token) {
         req.headers.authorization = `Bearer ${req.cookies.token}`;
       }
-      validateJwt(req, res, next);
+      if(req.headers.authorization){
+        validateJwt(req, res, next);
+      }
+      else{
+        sendJSONresponse(res, 200, {
+          "status": "failure",
+          "message": "UnauthorizedError: No authorization token was found"
+        });
+      }
     })
     // Attach user to request
     .use(function(req, res, next) {
       User.findById(req.user._id).exec()
         .then(user => {
           if(!user) {
-            return res.status(401).end();
+              return res.status(401).end();
           }
           req.user = user;
           next();
@@ -45,6 +59,7 @@ export function isAuthenticated() {
  * Checks if the user role meets the minimum requirements of the route
  */
 export function hasRole(roleRequired) {
+  console.log('hasRole :',roleRequired);
   if(!roleRequired) {
     throw new Error('Required role needs to be set');
   }
